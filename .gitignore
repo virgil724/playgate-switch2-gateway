@@ -1,0 +1,9 @@
+/build/
+/sdkconfig
+sdkconfig.old
+/test_apps/*/build/
+/test_apps/*/sdkconfig
+/build-uart/
+/.bleak-smoke/
+__pycache__/
+*.py[cod]

@@ -1,0 +1,87 @@
+menu "PlayGate Switch Gateway"
+
+config PLAYGATE_ENABLE_SERIAL
+    bool "Enable Serial input"
+    default y
+
+config PLAYGATE_ENABLE_UDP
+    bool "Enable Wi-Fi STA and UDP input"
+    default y
+
+choice PLAYGATE_SERIAL_BACKEND
+    prompt "Serial input backend"
+    depends on PLAYGATE_ENABLE_SERIAL
+    default PLAYGATE_SERIAL_USB_SERIAL_JTAG if IDF_TARGET_ESP32C6
+    default PLAYGATE_SERIAL_UART
+
+config PLAYGATE_SERIAL_USB_SERIAL_JTAG
+    bool "USB Serial/JTAG"
+    help
+        Use the ESP32-C6 USB Serial/JTAG controller for framed PlayGate input
+        and status output. The host baud setting is ignored by this backend.
+
+config PLAYGATE_SERIAL_UART
+    bool "UART0"
+    help
+        Use UART0 for framed PlayGate input and status output.
+
+endchoice
+
+config PLAYGATE_INPUT_TIMEOUT_MS
+    int "Input neutralization timeout (ms)"
+    range 10 1000
+    default 100
+
+config PLAYGATE_SOURCE_LEASE_MS
+    int "Input source ownership lease (ms)"
+    range 10 5000
+    default 300
+
+config PLAYGATE_UART_BAUD
+    int "UART0 baud rate"
+    range 115200 3000000
+    default 921600
+    depends on PLAYGATE_SERIAL_UART
+
+config PLAYGATE_UDP_PORT
+    int "UDP listen port"
+    range 1 65535
+    default 26760
+    depends on PLAYGATE_ENABLE_UDP
+
+config PLAYGATE_WIFI_SSID
+    string "Wi-Fi STA SSID (empty disables UDP)"
+    default ""
+    depends on PLAYGATE_ENABLE_UDP
+
+config PLAYGATE_WIFI_PASSWORD
+    string "Wi-Fi STA password"
+    default ""
+    depends on PLAYGATE_ENABLE_UDP
+
+config PLAYGATE_ENABLE_WEB
+    bool "Enable Wi-Fi web control page (HTTP + WebSocket)"
+    default y
+    depends on PLAYGATE_ENABLE_UDP && HTTPD_WS_SUPPORT
+    help
+        Serve tools/gamepad.html over HTTP and accept 17-byte PlayGate input
+        frames on the WebSocket endpoint /ws. Requires WebSocket support in
+        esp_http_server (CONFIG_HTTPD_WS_SUPPORT), which sdkconfig.defaults
+        enables.
+
+config PLAYGATE_AP_SSID_PREFIX
+    string "SoftAP SSID prefix (used when Wi-Fi STA SSID is empty)"
+    default "PlayGate"
+    depends on PLAYGATE_ENABLE_UDP
+
+config PLAYGATE_AP_PASSWORD
+    string "SoftAP password (min 8 chars; shorter or empty = open network)"
+    default "playgate"
+    depends on PLAYGATE_ENABLE_UDP
+
+config PLAYGATE_REPORT_HZ
+    int "Bluetooth input report rate (Hz)"
+    range 60 240
+    default 100
+
+endmenu

@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlayGate Web Control</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #14171c;
+    --panel: #1d222a;
+    --line: #2c333e;
+    --text: #e6eaf0;
+    --dim: #8d98a8;
+    --accent: #4ea1ff;
+    --on: #2ea86a;
+    --warn: #d9a13b;
+    --err: #d9534f;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    padding: 16px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+    user-select: none;
+  }
+  h1 { font-size: 17px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 13px; margin: 0 0 8px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 16px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  label.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); }
+  input[type=text], select {
+    background: #12161c;
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font: inherit;
+  }
+  button {
+    background: #232a34;
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 12px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover { border-color: #3c4757; }
+  button.active { background: var(--accent); border-color: var(--accent); color: #06121f; }
+  button.pad-btn { min-width: 46px; padding: 10px 6px; }
+  button.pad-btn.on { background: var(--on); border-color: var(--on); color: #04170c; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--dim);
+    border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+  .dot.ok { background: var(--on); }
+  .dot.bad { background: var(--err); }
+  .dot.warn { background: var(--warn); }
+  #play-area { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  #panel-lstick, #panel-rstick { display: flex; flex-direction: column; align-items: center; }
+  .disc {
+    position: relative;
+    width: 132px; height: 132px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 40%, #262e39, #171c23);
+    border: 1px solid var(--line);
+    touch-action: none;
+  }
+  .disc::before, .disc::after {
+    content: ""; position: absolute; background: var(--line);
+  }
+  .disc::before { left: 50%; top: 8px; bottom: 8px; width: 1px; }
+  .disc::after { top: 50%; left: 8px; right: 8px; height: 1px; }
+  .knob {
+    position: absolute; left: 50%; top: 50%;
+    width: 44px; height: 44px; margin: -22px 0 0 -22px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: .9;
+    pointer-events: none;
+  }
+  .disc-label { display: block; color: var(--dim); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .dpad { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); gap: 4px; justify-content: center; }
+  .dpad .pad-btn { min-width: 0; }
+  .faces { display: grid; grid-template-columns: repeat(4, minmax(46px, 1fr)); gap: 6px; }
+  .faces .pad-btn { width: 100%; }
+  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 14px; font-variant-numeric: tabular-nums; }
+  .meta div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed #262d37; padding-bottom: 3px; }
+  .meta span:first-child { color: var(--dim); }
+  .notice { border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; font-size: 13px; }
+  .notice.warn { background: #2c2411; border: 1px solid #5c4a18; color: #f0d69a; }
+  .notice.err { background: #2d1616; border: 1px solid #5c2222; color: #f3b3b0; }
+  .notice.ok { background: #12271a; border: 1px solid #225235; color: #a8e6c1; }
+  .hidden { display: none; }
+  .hint { color: var(--dim); font-size: 12px; }
+  kbd { background: #12161c; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 11px; }
+  @media (max-width: 700px), (max-height: 700px) {
+    body { padding: 10px; }
+    .panel { padding: 10px; margin-bottom: 10px; }
+    .disc { width: 112px; height: 112px; }
+    .knob { width: 40px; height: 40px; margin: -20px 0 0 -20px; }
+    #play-area { gap: 10px; }
+    .dpad { grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(3, 42px); }
+    .faces { grid-template-columns: repeat(4, minmax(40px, 1fr)); gap: 5px; }
+    button.pad-btn { padding: 9px 4px; }
+  }
+  /* Phone held sideways: left stick and right stick sit under the thumbs at
+     opposite edges, so the whole pad is reachable without scrolling. */
+  @media (orientation: landscape) and (max-height: 560px) {
+    body { padding: 6px; }
+    .wrap { max-width: none; }
+    h1, .intro { display: none; }
+    .panel { padding: 8px; margin-bottom: 8px; border-radius: 8px; }
+    h2 { font-size: 11px; margin-bottom: 5px; }
+    .bar { margin: 5px 0 8px; }
+    #play-area {
+      grid-template-columns: minmax(104px, 1fr) auto auto minmax(104px, 1fr);
+      align-items: start;
+      gap: 8px;
+    }
+    .disc { width: 98px; height: 98px; }
+    .knob { width: 36px; height: 36px; margin: -18px 0 0 -18px; }
+    .disc-label { font-size: 11px; margin-top: 3px; }
+    .dpad { grid-template-columns: repeat(3, 36px); grid-template-rows: repeat(3, 36px); gap: 3px; }
+    .faces { grid-template-columns: repeat(4, minmax(36px, 1fr)); gap: 4px; }
+    button.pad-btn { padding: 7px 3px; font-size: 12px; }
+    #panel-dpad .hint, #panel-buttons .hint { display: none; }
+    .meta { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PlayGate Web Control</h1>
+  <p class="hint intro">Sends PlayGate v2 input frames to the ESP32-C6 gateway over Wi-Fi (WebSocket) or USB (Web Serial). A physical gamepad recognised by the browser drives the gateway directly; the on-screen controls take over whenever the pad is at rest. Latency is shown as reported by the device and by this page; judge smoothness by feel.</p>
+
+  <div id="notice" class="notice hidden"></div>
+
+  <div class="panel" id="panel-transport">
+    <h2>Transport</h2>
+    <div class="bar">
+      <button id="mode-wifi" type="button">Wi-Fi (WebSocket)</button>
+      <button id="mode-serial" type="button">USB (Web Serial)</button>
+      <button id="connect" type="button">Connect</button>
+      <span class="pill"><span id="state-dot" class="dot"></span><span id="state-text">disconnected</span></span>
+      <span class="pill" id="transport-pill">transport: —</span>
+    </div>
+    <div class="bar">
+      <label class="field" id="host-field">Device host (Wi-Fi)
+        <input type="text" id="ws-host" size="24" value="192.168.4.1">
+      </label>
+      <label class="field" id="serial-field">Serial port (USB)
+        <select id="serial-baud">
+          <option value="921600" selected>921600 baud</option>
+          <option value="115200">115200 baud</option>
+          <option value="1500000">1500000 baud</option>
+        </select>
+      </label>
+      <label class="field hidden" id="gamepad-field">Physical gamepad
+        <select id="gamepad-select">
+          <option value="">none detected</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div id="play-area">
+    <section class="panel" id="panel-lstick">
+      <h2>Left stick</h2>
+      <div class="disc" id="disc-l"><div class="knob" id="knob-l"></div></div>
+      <small class="disc-label" id="label-l">L 0, 0</small>
+    </section>
+
+    <section class="panel" id="panel-dpad">
+      <h2>D-pad</h2>
+      <div class="dpad">
+        <div></div><button class="pad-btn" data-bit="14" type="button">Up</button><div></div>
+        <button class="pad-btn" data-bit="16" type="button">Left</button><div></div><button class="pad-btn" data-bit="17" type="button">Right</button>
+        <div></div><button class="pad-btn" data-bit="15" type="button">Down</button><div></div>
+      </div>
+      <p class="hint">Keyboard: <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></p>
+    </section>
+
+    <section class="panel" id="panel-buttons">
+      <h2>Buttons</h2>
+      <div class="faces">
+        <button class="pad-btn" data-bit="0" type="button">A</button>
+        <button class="pad-btn" data-bit="1" type="button">B</button>
+        <button class="pad-btn" data-bit="2" type="button">X</button>
+        <button class="pad-btn" data-bit="3" type="button">Y</button>
+        <button class="pad-btn" data-bit="4" type="button">L</button>
+        <button class="pad-btn" data-bit="5" type="button">R</button>
+        <button class="pad-btn" data-bit="6" type="button">ZL</button>
+        <button class="pad-btn" data-bit="7" type="button">ZR</button>
+        <button class="pad-btn" data-bit="12" type="button">L Stick</button>
+        <button class="pad-btn" data-bit="13" type="button">R Stick</button>
+        <button class="pad-btn" data-bit="10" type="button">Home</button>
+        <button class="pad-btn" data-bit="11" type="button">Capture</button>
+        <button class="pad-btn" data-bit="8" type="button">Plus</button>
+        <button class="pad-btn" data-bit="9" type="button">Minus</button>
+      </div>
+      <p class="hint">Keyboard: <kbd>Z</kbd><kbd>X</kbd><kbd>A</kbd><kbd>S</kbd> = A/B/X/Y, <kbd>Q</kbd><kbd>E</kbd> = L/R, <kbd>1</kbd><kbd>2</kbd> = ZL/ZR, <kbd>Enter</kbd>/<kbd>Backspace</kbd> = Plus/Minus</p>
+    </section>
+
+    <section class="panel" id="panel-rstick">
+      <h2>Right stick</h2>
+      <div class="disc" id="disc-r"><div class="knob" id="knob-r"></div></div>
+      <small class="disc-label" id="label-r">R 0, 0</small>
+    </section>
+  </div>
+
+  <div class="panel" id="panel-status">
+    <h2>Status</h2>
+    <div class="meta" id="status-grid"></div>
+  </div>
+
+  <p class="hint">Released buttons, pointer/key release, transport switches and page unload all send a neutral frame. The device also neutralizes input after its 100 ms timeout.</p>
+</div>
+
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------- protocol */
+
+const INPUT_SIZE = 17;
+const STATUS_SIZE = 20;
+const STATUS_PROBE = 0xf0;
+const BUTTON_MASK = 0x0003ffff;
+const AXIS_MAX = 32767;
+const AXIS_MIN = -32767;
+const TICK_MS = 10;
+const RESEND_MS = 40;
+const PROBE_MS = 1000;
+const UI_MS = 100;
+
+const HID_STATE_NAMES = ["idle", "discoverable", "connecting", "connected"];
+const SOURCE_NAMES = ["none", "serial", "udp", "ble"];
+
+const BUTTON_BITS = {
+  A: 0, B: 1, X: 2, Y: 3, L: 4, R: 5, ZL: 6, ZR: 7,
+  PLUS: 8, MINUS: 9, HOME: 10, CAPTURE: 11,
+  L_STICK: 12, R_STICK: 13,
+  DPAD_UP: 14, DPAD_DOWN: 15, DPAD_LEFT: 16, DPAD_RIGHT: 17,
+};
+
+const KEY_BITS = {
+  ArrowUp: BUTTON_BITS.DPAD_UP, ArrowDown: BUTTON_BITS.DPAD_DOWN,
+  ArrowLeft: BUTTON_BITS.DPAD_LEFT, ArrowRight: BUTTON_BITS.DPAD_RIGHT,
+  z: BUTTON_BITS.A, x: BUTTON_BITS.B, a: BUTTON_BITS.X, s: BUTTON_BITS.Y,
+  q: BUTTON_BITS.L, e: BUTTON_BITS.R,
+  "1": BUTTON_BITS.ZL, "2": BUTTON_BITS.ZR,
+  Enter: BUTTON_BITS.PLUS, Backspace: BUTTON_BITS.MINUS,
+};
+
+const SERIAL_FRAME_VERSION = 1;
+const SERIAL_INPUT_TYPE = 0x01;
+const SERIAL_STATUS_TYPE = 0x81;
+
+function crc16CcittFalse(bytes) {
+  let crc = 0xffff;
+  for (let i = 0; i < bytes.length; i++) {
+    crc ^= bytes[i] << 8;
+    for (let bit = 0; bit < 8; bit++) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+    }
+  }
+  return crc;
+}
+
+function cobsEncode(bytes) {
+  const out = [0];
+  let codeIndex = 0;
+  let code = 1;
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] === 0) {
+      out[codeIndex] = code;
+      codeIndex = out.length;
+      out.push(0);
+      code = 1;
+    } else {
+      out.push(bytes[i]);
+      code++;
+      if (code === 0xff) {
+        out[codeIndex] = code;
+        codeIndex = out.length;
+        out.push(0);
+        code = 1;
+      }
+    }
+  }
+  out[codeIndex] = code;
+  return Uint8Array.from(out);
+}
+
+function cobsDecode(bytes) {
+  const out = [];
+  let index = 0;
+  while (index < bytes.length) {
+    const code = bytes[index++];
+    if (code === 0 || code - 1 > bytes.length - index) {
+      return null;
+    }
+    for (let i = 1; i < code; i++) {
+      out.push(bytes[index++]);
+    }
+    if (code !== 0xff && index < bytes.length) {
+      out.push(0);
+    }
+  }
+  return Uint8Array.from(out);
+}
+
+function serialEncode(type, payload) {
+  const body = new Uint8Array(3 + payload.length + 2);
+  body[0] = SERIAL_FRAME_VERSION;
+  body[1] = type;
+  body[2] = payload.length;
+  body.set(payload, 3);
+  const crc = crc16CcittFalse(body.subarray(0, 3 + payload.length));
+  body[3 + payload.length] = crc & 0xff;
+  body[4 + payload.length] = (crc >> 8) & 0xff;
+  const encoded = cobsEncode(body);
+  const out = new Uint8Array(encoded.length + 1);
+  out.set(encoded, 0);
+  out[encoded.length] = 0;
+  return out;
+}
+
+function decodeSerialPacket(packet) {
+  const decoded = cobsDecode(packet);
+  if (decoded === null || decoded.length < 5) {
+    return null;
+  }
+  const payloadLength = decoded[2];
+  if (decoded[0] !== SERIAL_FRAME_VERSION || decoded.length !== 3 + payloadLength + 2) {
+    return null;
+  }
+  const expected = decoded[3 + payloadLength] | (decoded[4 + payloadLength] << 8);
+  if (crc16CcittFalse(decoded.subarray(0, 3 + payloadLength)) !== expected) {
+    return null;
+  }
+  return { type: decoded[1], payload: decoded.subarray(3, 3 + payloadLength) };
+}
+
+function buildInputFrame(buttons, lx, ly, rx, ry, sequence) {
+  const frame = new Uint8Array(INPUT_SIZE);
+  const view = new DataView(frame.buffer);
+  frame[0] = 2;
+  view.setUint32(1, buttons & BUTTON_MASK, true);
+  view.setInt16(5, lx, true);
+  view.setInt16(7, ly, true);
+  view.setInt16(9, rx, true);
+  view.setInt16(11, ry, true);
+  view.setUint32(13, sequence >>> 0, true);
+  return frame;
+}
+
+function decodeStatus(bytes) {
+  if (bytes.length !== STATUS_SIZE) {
+    return null;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return {
+    version: bytes[0],
+    hidState: bytes[1],
+    source: bytes[2],
+    flags: bytes[3],
+    lastSequence: view.getUint32(4, true),
+    accepted: view.getUint16(8, true),
+    invalid: view.getUint16(10, true),
+    stale: view.getUint16(12, true),
+    conflicts: view.getUint16(14, true),
+    superseded: view.getUint16(16, true),
+    latencyUs: view.getUint16(18, true),
+  };
+}
+
+/* PlayGate button for each standard-mapping gamepad button index, in W3C order.
+   Indices 12..15 are the D-pad and 16/17 are Guide/Share, so this is not an
+   identity mapping. The array position is the gamepad index; BUTTON_BITS holds
+   bit numbers, so the mask is 1 << bit. */
+const GAMEPAD_BUTTON_ORDER = [
+  "A", "B", "X", "Y", "L", "R", "ZL", "ZR",
+  "MINUS", "PLUS", "L_STICK", "R_STICK",
+  "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT",
+  "HOME", "CAPTURE",
+];
+const GAMEPAD_AXIS_DEADZONE = 0.08;
+
+/* ------------------------------------------------------------------- state */
+
+const state = {
+  mode: "wifi",
+  connected: false,
+  buttons: 0,
+  lx: 0, ly: 0, rx: 0, ry: 0,
+  sequence: 0,
+  dirty: true,
+  lastSentAt: 0,
+  lastStatus: null,
+  rttSamples: [],
+  lastStatusAt: 0,
+  statusIntervalMs: null,
+  lastUiAt: 0,
+};
+
+/* On-screen controls and a physical gamepad are tracked separately; the pad
+   owns the outgoing frame while it is deflected, otherwise the on-screen
+   controls do, so neither source can strand the other's buttons. */
+const touch = { buttons: 0, lx: 0, ly: 0, rx: 0, ry: 0 };
+const gamepad = { buttons: 0, lx: 0, ly: 0, rx: 0, ry: 0, active: false, id: "" };
+
+function sticksNonNeutral() {
+  return state.buttons !== 0 || state.lx !== 0 || state.ly !== 0 ||
+         state.rx !== 0 || state.ry !== 0;
+}
+
+function clearSource(source) {
+  source.buttons = 0;
+  source.lx = 0;
+  source.ly = 0;
+  source.rx = 0;
+  source.ry = 0;
+}
+
+function resetInput() {
+  clearSource(touch);
+  clearSource(gamepad);
+  gamepad.active = false;
+  clearSource(state);
+  state.dirty = true;
+  syncButtonClasses();
+  drawStick("l", 0, 0);
+  drawStick("r", 0, 0);
+}
+
+/* Copies whichever source owns the frame into the outgoing state. */
+function syncOutgoing() {
+  const source = gamepad.active ? gamepad : touch;
+  if (source.buttons === state.buttons && source.lx === state.lx &&
+      source.ly === state.ly && source.rx === state.rx && source.ry === state.ry) {
+    return;
+  }
+  state.buttons = source.buttons;
+  state.lx = source.lx;
+  state.ly = source.ly;
+  state.rx = source.rx;
+  state.ry = source.ry;
+  state.dirty = true;
+  syncButtonClasses();
+  drawStick("l", state.lx, state.ly);
+  drawStick("r", state.rx, state.ry);
+}
+
+/* -------------------------------------------------------------- gamepad API */
+
+function gamepadSupported() {
+  return typeof navigator !== "undefined" && typeof navigator.getGamepads === "function";
+}
+
+function connectedGamepads() {
+  if (!gamepadSupported()) {
+    return [];
+  }
+  const pads = [];
+  const list = navigator.getGamepads();
+  for (let index = 0; index < list.length; index++) {
+    if (list[index]) {
+      pads.push(list[index]);
+    }
+  }
+  return pads;
+}
+
+function gamepadAxis(raw) {
+  if (typeof raw !== "number" || !isFinite(raw)) {
+    return 0;
+  }
+  const clamped = Math.max(-1, Math.min(1, raw));
+  if (Math.abs(clamped) < GAMEPAD_AXIS_DEADZONE) {
+    return 0;
+  }
+  return Math.round(clamped * AXIS_MAX);
+}
+
+function refreshGamepadList() {
+  const field = document.getElementById("gamepad-field");
+  const select = document.getElementById("gamepad-select");
+  const pads = connectedGamepads();
+
+  if (pads.length === 0) {
+    field.classList.add("hidden");
+    select.replaceChildren(new Option("none detected", ""));
+    select.value = "";
+    clearSource(gamepad);
+    gamepad.active = false;
+    gamepad.id = "";
+    resetInput();
+    return;
+  }
+
+  const previous = select.value;
+  select.replaceChildren(...pads.map((pad) => {
+    const label = pad.id.length > 40 ? pad.id.slice(0, 40) + "…" : pad.id;
+    return new Option(label, String(pad.index));
+  }));
+  select.value = pads.some((pad) => String(pad.index) === previous)
+    ? previous
+    : String(pads[0].index);
+  field.classList.remove("hidden");
+}
+
+function pollGamepad() {
+  const pads = connectedGamepads();
+  if (pads.length === 0) {
+    gamepad.active = false;
+    return;
+  }
+
+  const wanted = document.getElementById("gamepad-select").value;
+  const pad = pads.find((candidate) => String(candidate.index) === wanted) || pads[0];
+
+  let buttons = 0;
+  for (let index = 0; index < GAMEPAD_BUTTON_ORDER.length; index++) {
+    const button = pad.buttons[index];
+    if (!button) {
+      continue;
+    }
+    if (button.pressed || button.value > 0.5) {
+      buttons |= 1 << BUTTON_BITS[GAMEPAD_BUTTON_ORDER[index]];
+    }
+  }
+  buttons &= BUTTON_MASK;
+
+  const lx = gamepadAxis(pad.axes[0]);
+  const ly = gamepadAxis(pad.axes[1]);
+  const rx = gamepadAxis(pad.axes[2]);
+  const ry = gamepadAxis(pad.axes[3]);
+
+  gamepad.buttons = buttons;
+  gamepad.lx = lx;
+  gamepad.ly = ly;
+  gamepad.rx = rx;
+  gamepad.ry = ry;
+  gamepad.id = pad.id;
+  gamepad.active = buttons !== 0 || lx !== 0 || ly !== 0 || rx !== 0 || ry !== 0;
+}
+
+/* ------------------------------------------------------------------ transport */
+
+let ws = null;
+let wsRetry = null;
+let serialPort = null;
+let serialReader = null;
+let serialWriter = null;
+let serialEpoch = 0;
+let serialBuffer = [];
+let serialWriting = false;
+
+function setLinked(connected, text, kind) {
+  state.connected = connected;
+  const dot = document.getElementById("state-dot");
+  dot.className = "dot " + (kind || (connected ? "ok" : "bad"));
+  document.getElementById("state-text").textContent = text;
+  document.getElementById("connect").textContent = connected ? "Disconnect" : "Connect";
+}
+
+function notice(text, kind) {
+  const el = document.getElementById("notice");
+  if (!text) {
+    el.className = "notice hidden";
+    el.textContent = "";
+    return;
+  }
+  el.className = "notice " + (kind || "warn");
+  el.textContent = text;
+}
+
+/* --- Wi-Fi (WebSocket) --- */
+
+function wsUrl() {
+  const host = document.getElementById("ws-host").value.trim();
+  const scheme = location.protocol === "https:" ? "wss://" : "ws://";
+  return scheme + host + "/ws";
+}
+
+function connectWifi() {
+  if (ws) {
+    return;
+  }
+  let socket;
+  try {
+    socket = new WebSocket(wsUrl());
+  } catch (error) {
+    notice("Cannot open " + wsUrl() + ": " + error.message, "err");
+    scheduleWifiRetry();
+    return;
+  }
+  socket.binaryType = "arraybuffer";
+  ws = socket;
+  setLinked(false, "connecting", "warn");
+
+  socket.onopen = () => {
+    notice("");
+    setLinked(true, "connected", "ok");
+    state.dirty = true;
+    state.lastSentAt = 0;
+    sendFrame();
+  };
+  socket.onmessage = (event) => {
+    const bytes = new Uint8Array(event.data);
+    const status = decodeStatus(bytes);
+    if (status) {
+      recordStatus(status, performance.now() - state.lastSentAt);
+    }
+  };
+  socket.onerror = () => {
+    if (ws === socket) {
+      notice("WebSocket error on " + wsUrl() + " — is the device powered and on the same network?", "err");
+    }
+  };
+  socket.onclose = () => {
+    if (ws !== socket) {
+      return;
+    }
+    ws = null;
+    setLinked(false, "disconnected", "bad");
+    resetInput();
+    scheduleWifiRetry();
+  };
+}
+
+function scheduleWifiRetry() {
+  if (state.mode !== "wifi" || wsRetry !== null) {
+    return;
+  }
+  wsRetry = setTimeout(() => {
+    wsRetry = null;
+    if (state.mode === "wifi") {
+      connectWifi();
+    }
+  }, 1500);
+}
+
+function disconnectWifi() {
+  if (wsRetry !== null) {
+    clearTimeout(wsRetry);
+    wsRetry = null;
+  }
+  if (ws) {
+    const socket = ws;
+    ws = null;
+    socket.onclose = null;
+    socket.close();
+  }
+  setLinked(false, "disconnected", "bad");
+}
+
+function sendFrame() {
+  if (state.mode !== "wifi" || !ws || ws.readyState !== WebSocket.OPEN) {
+    return false;
+  }
+  const frame = buildInputFrame(state.buttons, state.lx, state.ly, state.rx, state.ry, state.sequence);
+  state.sequence = (state.sequence + 1) >>> 0;
+  ws.send(frame);
+  state.lastSentAt = performance.now();
+  state.dirty = false;
+  return true;
+}
+
+/* Sends one all-neutral frame so the device drops a held button before the link goes away. */
+function sendNeutralFrame() {
+  const buttons = state.buttons;
+  const lx = state.lx, ly = state.ly, rx = state.rx, ry = state.ry;
+  state.buttons = 0;
+  state.lx = state.ly = state.rx = state.ry = 0;
+  const sent = sendFrame();
+  if (!sent) {
+    state.buttons = buttons;
+    state.lx = lx; state.ly = ly; state.rx = rx; state.ry = ry;
+  }
+  return sent;
+}
+
+function sendProbe() {
+  if (state.mode === "wifi" && ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(Uint8Array.of(STATUS_PROBE));
+    state.lastSentAt = performance.now();
+  }
+}
+
+/* --- USB (Web Serial) --- */
+
+function serialSupported() {
+  return typeof navigator !== "undefined" && "serial" in navigator;
+}
+
+async function connectSerial() {
+  if (serialPort) {
+    return;
+  }
+  if (!serialSupported()) {
+    notice("navigator.serial is unavailable. Open this file from a secure context, for example: " +
+           "run `python -m http.server 8000` in the repository root and use " +
+           "http://localhost:8000/tools/gamepad.html", "err");
+    return;
+  }
+  let port;
+  try {
+    port = await navigator.serial.requestPort();
+  } catch (error) {
+    notice("Serial port selection cancelled: " + error.message, "warn");
+    return;
+  }
+  const baudRate = Number(document.getElementById("serial-baud").value);
+  try {
+    await port.open({ baudRate });
+  } catch (error) {
+    notice("Cannot open serial port: " + error.message, "err");
+    return;
+  }
+
+  const epoch = ++serialEpoch;
+  serialPort = port;
+  serialBuffer = [];
+  try {
+    serialWriter = port.writable.getWriter();
+    serialReader = port.readable.getReader();
+  } catch (error) {
+    notice("Serial streams unavailable: " + error.message, "err");
+    await closeSerialPort();
+    return;
+  }
+
+  notice("");
+  setLinked(true, "connected", "ok");
+  state.dirty = true;
+  state.lastSentAt = 0;
+  readSerialLoop(epoch);
+}
+
+async function readSerialLoop(epoch) {
+  const reader = serialReader;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (value) {
+        feedSerial(value);
+      }
+    }
+  } catch (error) {
+    if (epoch === serialEpoch) {
+      notice("Serial read error: " + error.message, "err");
+    }
+  }
+  if (epoch !== serialEpoch) {
+    return;
+  }
+  await closeSerialPort();
+  setLinked(false, "disconnected", "bad");
+  resetInput();
+}
+
+function feedSerial(chunk) {
+  for (let i = 0; i < chunk.length; i++) {
+    if (chunk[i] === 0) {
+      if (serialBuffer.length > 0) {
+        const frame = decodeSerialPacket(Uint8Array.from(serialBuffer));
+        if (frame && frame.type === SERIAL_STATUS_TYPE) {
+          const status = decodeStatus(frame.payload);
+          if (status) {
+            recordStatus(status, null);
+          }
+        }
+        serialBuffer = [];
+      }
+    } else if (serialBuffer.length < 300) {
+      serialBuffer.push(chunk[i]);
+    } else {
+      serialBuffer = [];
+    }
+  }
+}
+
+async function sendSerialFrame(bytes) {
+  if (!serialWriter || serialWriting) {
+    return false;
+  }
+  serialWriting = true;
+  try {
+    await serialWriter.write(bytes);
+  } catch (error) {
+    notice("Serial write error: " + error.message, "err");
+    serialWriting = false;
+    return false;
+  }
+  serialWriting = false;
+  return true;
+}
+
+async function closeSerialPort() {
+  ++serialEpoch;   /* invalidates any in-flight read loop so it will not close twice */
+  if (serialReader) {
+    const reader = serialReader;
+    serialReader = null;
+    try { await reader.cancel(); } catch (error) { /* already closed */ }
+    try { reader.releaseLock(); } catch (error) { /* already released */ }
+  }
+  if (serialWriter) {
+    const writer = serialWriter;
+    serialWriter = null;
+    try { writer.releaseLock(); } catch (error) { /* already released */ }
+  }
+  if (serialPort) {
+    const port = serialPort;
+    serialPort = null;
+    try { await port.close(); } catch (error) { /* already closed */ }
+  }
+}
+
+/* ------------------------------------------------------------------ UI sync */
+
+function syncButtonClasses() {
+  document.querySelectorAll("button.pad-btn").forEach((button) => {
+    const bit = Number(button.dataset.bit);
+    const on = (state.buttons >>> bit) & 1;
+    button.classList.toggle("on", on === 1);
+    button.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+}
+
+function drawStick(side, x, y) {
+  const disc = document.getElementById("disc-" + side);
+  const knob = document.getElementById("knob-" + side);
+  const travel = Math.max(0, (disc.clientWidth - knob.clientWidth) / 2);
+  knob.style.transform = "translate(" + (x / AXIS_MAX * travel).toFixed(1) + "px," +
+                         (y / AXIS_MAX * travel).toFixed(1) + "px)";
+  document.getElementById("label-" + side).textContent =
+    (side === "l" ? "L " : "R ") + x + ", " + y;
+}
+
+function recordStatus(status, rttMs) {
+  const now = performance.now();
+  if (state.lastStatusAt !== 0) {
+    state.statusIntervalMs = now - state.lastStatusAt;
+  }
+  state.lastStatusAt = now;
+  state.lastStatus = status;
+  if (rttMs !== null && rttMs >= 0 && rttMs < 5000) {
+    state.rttSamples.push(rttMs);
+    if (state.rttSamples.length > 30) {
+      state.rttSamples.shift();
+    }
+  }
+}
+
+function renderStatus() {
+  const grid = document.getElementById("status-grid");
+  const status = state.lastStatus;
+  const rows = [];
+  const add = (name, value) => rows.push([name, value]);
+
+  add("transport", state.mode === "wifi" ? "Wi-Fi (WebSocket)" : "USB (Web Serial)");
+  add("link", state.connected ? "connected" : "disconnected");
+  add("input source", gamepad.active ? "gamepad" : "on-screen");
+  add("physical gamepad", gamepad.id
+    ? (gamepad.id.length > 40 ? gamepad.id.slice(0, 40) + "…" : gamepad.id)
+    : (gamepadSupported() ? "none connected" : "unsupported"));
+  add("hid state", status ? (HID_STATE_NAMES[status.hidState] || status.hidState) : "—");
+  add("active source", status ? (SOURCE_NAMES[status.source] || status.source) : "—");
+  add("wifi connected", status ? String(Boolean(status.flags & 1)) : "—");
+  add("ble connected", status ? String(Boolean(status.flags & 2)) : "—");
+  add("timeout neutral", status ? String(Boolean(status.flags & 4)) : "—");
+  add("last accepted seq", status ? status.lastSequence : "—");
+  add("accepted", status ? status.accepted : "—");
+  add("invalid", status ? status.invalid : "—");
+  add("stale", status ? status.stale : "—");
+  add("conflicts", status ? status.conflicts : "—");
+  add("superseded", status ? status.superseded : "—");
+  add("device receive→submit", status ? status.latencyUs + " µs" : "—");
+
+  if (state.mode === "wifi") {
+    const last = state.rttSamples.length ? state.rttSamples[state.rttSamples.length - 1] : null;
+    const avg = last === null ? null :
+      state.rttSamples.reduce((a, b) => a + b, 0) / state.rttSamples.length;
+    add("browser round trip", last === null ? "—" : last.toFixed(1) + " ms");
+    add("round trip average", avg === null ? "—" : avg.toFixed(1) + " ms");
+  } else {
+    add("status frame gap", state.statusIntervalMs === null
+      ? "—" : state.statusIntervalMs.toFixed(0) + " ms");
+  }
+
+  grid.replaceChildren(...rows.map(([name, value]) => {
+    const row = document.createElement("div");
+    const label = document.createElement("span");
+    label.textContent = name;
+    const val = document.createElement("span");
+    val.textContent = String(value);
+    row.append(label, val);
+    return row;
+  }));
+}
+
+/* -------------------------------------------------------------------- input */
+
+function tick() {
+  const now = performance.now();
+
+  pollGamepad();
+  syncOutgoing();
+
+  if (state.connected) {
+    const due = state.dirty || (sticksNonNeutral() && now - state.lastSentAt > RESEND_MS);
+    if (state.mode === "wifi") {
+      if (due) {
+        sendFrame();
+      } else if (now - state.lastSentAt > PROBE_MS) {
+        sendProbe();
+      }
+    } else if (due) {
+      const frame = buildInputFrame(state.buttons, state.lx, state.ly,
+                                    state.rx, state.ry, state.sequence);
+      state.sequence = (state.sequence + 1) >>> 0;
+      state.dirty = false;
+      state.lastSentAt = now;
+      sendSerialFrame(serialEncode(SERIAL_INPUT_TYPE, frame));
+    }
+  }
+
+  if (now - state.lastUiAt >= UI_MS) {
+    state.lastUiAt = now;
+    renderStatus();
+    document.getElementById("transport-pill").textContent =
+      "transport: " + (state.mode === "wifi" ? "Wi-Fi" : "USB");
+  }
+}
+
+function setMode(mode) {
+  if (state.mode === mode) {
+    return;
+  }
+  if (state.mode === "wifi") {
+    sendNeutralFrame();   /* one neutral frame before the socket goes away */
+    disconnectWifi();
+  } else {
+    sendNeutralSerial();
+    closeSerialPort();
+  }
+  state.mode = mode;
+  resetInput();
+  state.rttSamples = [];
+  state.lastStatus = null;
+  state.lastStatusAt = 0;
+  state.statusIntervalMs = null;
+  document.getElementById("mode-wifi").classList.toggle("active", mode === "wifi");
+  document.getElementById("mode-serial").classList.toggle("active", mode === "serial");
+  document.getElementById("host-field").classList.toggle("hidden", mode !== "wifi");
+  document.getElementById("serial-field").classList.toggle("hidden", mode !== "serial");
+  if (mode === "serial" && !serialSupported()) {
+    notice("navigator.serial is unavailable here. Serve this file from a secure context: " +
+           "`python -m http.server 8000` in the repository root, then open " +
+           "http://localhost:8000/tools/gamepad.html", "warn");
+  } else {
+    notice("");
+  }
+  renderStatus();
+}
+
+function setBit(bit, on) {
+  if (on) {
+    touch.buttons |= (1 << bit);
+  } else {
+    touch.buttons = (touch.buttons & ~(1 << bit)) >>> 0;
+  }
+  touch.buttons &= BUTTON_MASK;
+}
+
+document.querySelectorAll("button.pad-btn").forEach((button) => {
+  const bit = Number(button.dataset.bit);
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    setBit(bit, true);
+    /* Capture keeps the release on this button, but a control must still
+       respond if the browser refuses it. */
+    try {
+      button.setPointerCapture(event.pointerId);
+    } catch (error) { /* capture unavailable for this pointer */ }
+  });
+  const release = (event) => {
+    if (button.hasPointerCapture && button.hasPointerCapture(event.pointerId)) {
+      try {
+        button.releasePointerCapture(event.pointerId);
+      } catch (error) { /* already released */ }
+    }
+    setBit(bit, false);
+  };
+  button.addEventListener("pointerup", release);
+  button.addEventListener("pointercancel", release);
+});
+
+function setupStick(id, side) {
+  const disc = document.getElementById(id);
+  let pointerId = null;
+
+  const update = (event) => {
+    const rect = disc.getBoundingClientRect();
+    const dx = (event.clientX - rect.left - rect.width / 2) / (rect.width / 2);
+    const dy = (event.clientY - rect.top - rect.height / 2) / (rect.height / 2);
+    const magnitude = Math.hypot(dx, dy);
+    const scale = magnitude > 1 ? 1 / magnitude : 1;
+    const x = Math.round(Math.max(AXIS_MIN, Math.min(AXIS_MAX, dx * scale * AXIS_MAX)));
+    const y = Math.round(Math.max(AXIS_MIN, Math.min(AXIS_MAX, dy * scale * AXIS_MAX)));
+    if (side === "l") {
+      touch.lx = x; touch.ly = y;
+    } else {
+      touch.rx = x; touch.ry = y;
+    }
+    drawStick(side, x, y);
+  };
+
+  disc.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    pointerId = event.pointerId;
+    try {
+      disc.setPointerCapture(pointerId);
+    } catch (error) { /* capture unavailable for this pointer */ }
+    update(event);
+  });
+  disc.addEventListener("pointermove", (event) => {
+    if (pointerId === event.pointerId) {
+      update(event);
+    }
+  });
+  const release = (event) => {
+    if (pointerId !== event.pointerId) {
+      return;
+    }
+    if (disc.hasPointerCapture && disc.hasPointerCapture(pointerId)) {
+      try {
+        disc.releasePointerCapture(pointerId);
+      } catch (error) { /* already released */ }
+    }
+    pointerId = null;
+    if (side === "l") {
+      touch.lx = 0; touch.ly = 0;
+    } else {
+      touch.rx = 0; touch.ry = 0;
+    }
+    drawStick(side, 0, 0);
+  };
+  disc.addEventListener("pointerup", release);
+  disc.addEventListener("pointercancel", release);
+}
+
+window.addEventListener("keydown", (event) => {
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
+    return;
+  }
+  const bit = KEY_BITS[event.key] ?? KEY_BITS[event.key.toLowerCase?.()];
+  if (bit === undefined) {
+    return;
+  }
+  event.preventDefault();
+  setBit(bit, true);
+});
+
+window.addEventListener("keyup", (event) => {
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
+    return;
+  }
+  const bit = KEY_BITS[event.key] ?? KEY_BITS[event.key.toLowerCase?.()];
+  if (bit === undefined) {
+    return;
+  }
+  event.preventDefault();
+  setBit(bit, false);
+});
+
+window.addEventListener("blur", () => {
+  resetInput();
+});
+
+document.getElementById("connect").addEventListener("click", () => {
+  if (state.mode === "wifi") {
+    if (ws) {
+      disconnectWifi();
+      resetInput();
+    } else {
+      connectWifi();
+    }
+  } else if (serialPort) {
+    sendNeutralSerial();
+    closeSerialPort();
+    setLinked(false, "disconnected", "bad");
+  } else {
+    connectSerial();
+  }
+});
+
+function sendNeutralSerial() {
+  if (state.mode === "serial" && serialWriter) {
+    const frame = buildInputFrame(0, 0, 0, 0, 0, state.sequence);
+    state.sequence = (state.sequence + 1) >>> 0;
+    sendSerialFrame(serialEncode(SERIAL_INPUT_TYPE, frame));
+  }
+}
+
+document.getElementById("mode-wifi").addEventListener("click", () => setMode("wifi"));
+document.getElementById("mode-serial").addEventListener("click", () => setMode("serial"));
+
+if (gamepadSupported()) {
+  window.addEventListener("gamepadconnected", () => refreshGamepadList());
+  window.addEventListener("gamepaddisconnected", () => refreshGamepadList());
+  document.getElementById("gamepad-select").addEventListener("change", () => {
+    clearSource(gamepad);
+    gamepad.active = false;
+    resetInput();
+  });
+}
+
+window.addEventListener("beforeunload", () => {
+  if (state.mode === "wifi") {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(buildInputFrame(0, 0, 0, 0, 0, state.sequence));
+    }
+  } else {
+    sendNeutralSerial();
+  }
+});
+
+/* --------------------------------------------------------------------- boot */
+
+setupStick("disc-l", "l");
+setupStick("disc-r", "r");
+refreshGamepadList();
+
+let defaultMode = location.protocol === "file:" ? "serial" : "wifi";
+if (defaultMode === "wifi" && location.protocol !== "file:") {
+  const host = location.host;
+  if (host && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+    document.getElementById("ws-host").value = host;
+  }
+}
+state.mode = null;
+setMode(defaultMode);
+if (defaultMode === "wifi") {
+  notice("Fill in the device host and press Connect. With no Wi-Fi credentials configured the device starts a SoftAP named PlayGate-XXXX (default password playgate) at 192.168.4.1.", "ok");
+}
+renderStatus();
+setInterval(tick, TICK_MS);
+</script>
+</body>
+</html>
