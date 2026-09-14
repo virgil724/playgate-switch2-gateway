@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include "controller_core.h"
+#include "display_ui.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "gateway_status.h"
@@ -44,6 +45,13 @@ void app_main(void)
 
     input_core_init();
     gateway_status_init();
+
+#if CONFIG_PLAYGATE_ENABLE_DISPLAY
+    error = display_ui_start();
+    if (error != ESP_OK) {
+        record_transport_failure("Display UI", error);
+    }
+#endif
 
     error = switch2_controller_start();
     if (error != ESP_OK) {

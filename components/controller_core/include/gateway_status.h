@@ -17,6 +17,12 @@ typedef enum {
     GATEWAY_HID_CONNECTED = 3,
 } gateway_hid_state_t;
 
+typedef struct {
+    gateway_hid_state_t hid_state;
+    bool wifi_connected;
+    bool ble_connected;
+} gateway_status_view_t;
+
 typedef void (*gateway_status_changed_cb_t)(void *context);
 
 void gateway_status_init(void);
@@ -25,6 +31,7 @@ void gateway_status_set_wifi_connected(bool connected);
 void gateway_status_set_ble_connected(bool connected);
 void gateway_status_set_changed_callback(gateway_status_changed_cb_t callback,
                                          void *context);
+void gateway_status_get_view(gateway_status_view_t *out);
 void gateway_status_encode(int64_t now_us, uint8_t out[GATEWAY_STATUS_SIZE]);
 
 #ifdef __cplusplus

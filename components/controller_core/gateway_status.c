@@ -118,31 +118,37 @@ void gateway_status_notify_core_changed(void)
     notify_changed();
 }
 
+void gateway_status_get_view(gateway_status_view_t *out)
+{
+    if (out == NULL) {
+        return;
+    }
+
+    portENTER_CRITICAL(&s_status_lock);
+    out->hid_state = s_status.hid_state;
+    out->wifi_connected = s_status.wifi_connected;
+    out->ble_connected = s_status.ble_connected;
+    portEXIT_CRITICAL(&s_status_lock);
+}
+
 void gateway_status_encode(int64_t now_us, uint8_t out[GATEWAY_STATUS_SIZE])
 {
     if (out == NULL) {
         return;
     }
 
-    gateway_hid_state_t hid_state;
-    bool wifi_connected;
-    bool ble_connected;
-
-    portENTER_CRITICAL(&s_status_lock);
-    hid_state = s_status.hid_state;
-    wifi_connected = s_status.wifi_connected;
-    ble_connected = s_status.ble_connected;
-    portEXIT_CRITICAL(&s_status_lock);
+    gateway_status_view_t view;
+    gateway_status_get_view(&view);
 
     input_metrics_t metrics;
     input_core_snapshot(now_us, NULL, &metrics);
 
     memset(out, 0, GATEWAY_STATUS_SIZE);
     out[0] = GATEWAY_STATUS_VERSION;
-    out[1] = (uint8_t)hid_state;
+    out[1] = (uint8_t)view.hid_state;
     out[2] = (uint8_t)metrics.active_source;
-    out[3] = (wifi_connected ? UINT8_C(1) : UINT8_C(0)) |
-             (ble_connected ? UINT8_C(2) : UINT8_C(0)) |
+    out[3] = (view.wifi_connected ? UINT8_C(1) : UINT8_C(0)) |
+             (view.ble_connected ? UINT8_C(2) : UINT8_C(0)) |
              (metrics.timeout_neutral ? UINT8_C(4) : UINT8_C(0));
     encode_u32_le(metrics.last_accepted_sequence, &out[4]);
     encode_u16_le(saturate_u16(metrics.accepted_total), &out[8]);

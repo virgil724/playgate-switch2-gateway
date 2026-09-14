@@ -1,6 +1,7 @@
 /build/
 /sdkconfig
 sdkconfig.old
+/managed_components/
 /test_apps/*/build/
 /test_apps/*/sdkconfig
 /build-uart/

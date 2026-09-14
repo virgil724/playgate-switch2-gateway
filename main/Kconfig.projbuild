@@ -84,4 +84,35 @@ config PLAYGATE_REPORT_HZ
     range 60 240
     default 100
 
+config PLAYGATE_ENABLE_DISPLAY
+    bool "Enable on-board LCD status UI (ESP32-C6-LCD-1.47)"
+    default y
+
+config PLAYGATE_DISPLAY_BACKLIGHT_PERCENT
+    int "LCD backlight brightness (%)"
+    range 1 100
+    default 50
+    depends on PLAYGATE_ENABLE_DISPLAY
+    help
+        Waveshare documents that this panel must not run at full brightness for
+        long periods; keep this at or below 50.
+
+config PLAYGATE_DISPLAY_SPI_MHZ
+    int "LCD SPI clock (MHz)"
+    range 10 40
+    default 40
+    depends on PLAYGATE_ENABLE_DISPLAY
+
+config PLAYGATE_DISPLAY_REFRESH_MS
+    int "LCD UI tick period (ms)"
+    range 20 500
+    default 50
+    depends on PLAYGATE_ENABLE_DISPLAY
+
+config PLAYGATE_DISPLAY_VALUE_MS
+    int "LCD value refresh period (ms)"
+    range 100 5000
+    default 200
+    depends on PLAYGATE_ENABLE_DISPLAY
+
 endmenu

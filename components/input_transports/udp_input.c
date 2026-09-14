@@ -230,6 +230,44 @@ static size_t build_ap_ssid(char *out, size_t capacity)
                             mac[5]);
 }
 
+void input_transports_get_net_info(input_transports_net_info_t *out)
+{
+    if (out == NULL) {
+        return;
+    }
+
+#if !CONFIG_PLAYGATE_ENABLE_UDP
+    memset(out, 0, sizeof(*out));
+    strcpy(out->ip, "--");
+#else
+    memset(out, 0, sizeof(*out));
+    strcpy(out->ip, "--");
+    out->ap_mode = s_ap_mode;
+
+    if (s_wifi_netif == NULL) {
+        return;
+    }
+    out->started = true;
+    out->connected = wifi_is_connected();
+
+    if (s_ap_mode) {
+        (void)build_ap_ssid(out->ssid, sizeof(out->ssid));
+    } else {
+        strlcpy(out->ssid, CONFIG_PLAYGATE_WIFI_SSID, sizeof(out->ssid));
+    }
+
+    if (!out->connected) {
+        return;
+    }
+
+    esp_netif_ip_info_t info = {0};
+    if (esp_netif_get_ip_info(s_wifi_netif, &info) != ESP_OK || info.ip.addr == 0) {
+        return;
+    }
+    (void)esp_ip4addr_ntoa(&info.ip, out->ip, sizeof(out->ip));
+#endif
+}
+
 static void wifi_cleanup(void)
 {
     if (s_ip_event_instance != NULL) {

@@ -4,7 +4,10 @@ if(DEFINED ENV{IDF_TARGET} AND NOT "$ENV{IDF_TARGET}" STREQUAL "esp32c6")
     message(FATAL_ERROR "Gateway unit tests require IDF_TARGET=esp32c6")
 endif()
 
-set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
+set(EXTRA_COMPONENT_DIRS
+    "${CMAKE_CURRENT_LIST_DIR}/../../components/controller_core"
+    "${CMAKE_CURRENT_LIST_DIR}/../../components/switch2_controller"
+    "${CMAKE_CURRENT_LIST_DIR}/../../components/input_transports")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 project(playgate_gateway_unit_tests)
