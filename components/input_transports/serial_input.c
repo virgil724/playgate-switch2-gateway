@@ -22,7 +22,8 @@
 
 #define PLAYGATE_UART_PORT UART_NUM_0
 #define SERIAL_RX_RING_SIZE 1024
-#define SERIAL_TX_RING_SIZE 1024
+#define SERIAL_TX_RING_SIZE 128
+#define SERIAL_TX_TIMEOUT_MS 5u
 #define SERIAL_IO_CHUNK_SIZE 128
 #define SERIAL_TASK_STACK_DEPTH 3072
 #define SERIAL_TASK_PRIORITY 9
@@ -64,21 +65,10 @@ static int serial_backend_read(uint8_t *data, size_t capacity)
 static void serial_backend_write(const uint8_t *data, size_t len)
 {
 #if CONFIG_PLAYGATE_SERIAL_USB_SERIAL_JTAG
-    size_t offset = 0;
-    while (offset < len) {
-        size_t chunk_len = len - offset;
-        if (chunk_len > SERIAL_IO_CHUNK_SIZE) {
-            chunk_len = SERIAL_IO_CHUNK_SIZE;
-        }
-
-        const int written = usb_serial_jtag_write_bytes(data + offset,
-                                                        chunk_len,
-                                                        portMAX_DELAY);
-        if (written <= 0 || (size_t)written > chunk_len) {
-            return;
-        }
-        offset += (size_t)written;
+    if (!usb_serial_jtag_is_connected() || len == 0u || len > SERIAL_TX_RING_SIZE) {
+        return;
     }
+    (void)usb_serial_jtag_write_bytes(data, len, pdMS_TO_TICKS(SERIAL_TX_TIMEOUT_MS));
 #elif CONFIG_PLAYGATE_SERIAL_UART
     (void)uart_write_bytes(PLAYGATE_UART_PORT, data, len);
 #else

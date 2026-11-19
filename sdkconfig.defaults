@@ -2,6 +2,7 @@
 CONFIG_IDF_TARGET="esp32c6"
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 CONFIG_FREERTOS_UNICORE=y
+CONFIG_FREERTOS_HZ=1000
 
 # Fixed NVS/PHY/factory layout; remaining flash is intentionally unpartitioned.
 CONFIG_PARTITION_TABLE_CUSTOM=y

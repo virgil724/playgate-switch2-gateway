@@ -1,0 +1,5 @@
+# Overlay for USB-only operation with playgate-host (disables Wi-Fi SoftAP/UDP/Web
+# to eliminate 2.4 GHz radio coexistence jitter and unauthenticated network ingress).
+# Build: idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.usb_only" build
+CONFIG_PLAYGATE_ENABLE_UDP=n
+CONFIG_PLAYGATE_ENABLE_WEB=n

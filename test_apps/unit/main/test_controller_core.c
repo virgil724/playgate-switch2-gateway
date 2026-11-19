@@ -329,3 +329,99 @@ TEST_CASE("gateway status uses exact layout and saturates every narrow counter",
     };
     TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, status, sizeof(expected));
 }
+
+TEST_CASE("continuous stale frames do not extend source epoch past lease", "[controller_core]")
+{
+    uint8_t payload[PLAYGATE_INPUT_PAYLOAD_SIZE];
+    input_core_init();
+
+    make_payload(payload, PLAYGATE_BUTTON_A, 0, 0, 0, 0, 1000);
+    TEST_ASSERT_EQUAL(INPUT_SUBMIT_ACCEPTED,
+                      input_core_submit(INPUT_SOURCE_SERIAL, payload, sizeof(payload), 0));
+
+    for (uint32_t step = 1; step <= 7; ++step) {
+        make_payload(payload, PLAYGATE_BUTTON_B, 0, 0, 0, 0, step);
+        TEST_ASSERT_EQUAL(INPUT_SUBMIT_STALE,
+                          input_core_submit(INPUT_SOURCE_SERIAL,
+                                            payload,
+                                            sizeof(payload),
+                                            (int64_t)step * 40000));
+    }
+
+    make_payload(payload, PLAYGATE_BUTTON_X, 0, 0, 0, 0, 8);
+    TEST_ASSERT_EQUAL(INPUT_SUBMIT_ACCEPTED,
+                      input_core_submit(INPUT_SOURCE_SERIAL, payload, sizeof(payload), 300000));
+
+    controller_state_t state;
+    input_core_snapshot(300000, &state, NULL);
+    TEST_ASSERT_EQUAL_UINT32(8, state.sequence);
+    TEST_ASSERT_EQUAL_HEX32(PLAYGATE_BUTTON_X, state.buttons);
+}
+
+TEST_CASE("repeated snapshot and mark_reported on same generation preserves initial latency", "[controller_core]")
+{
+    uint8_t payload[PLAYGATE_INPUT_PAYLOAD_SIZE];
+    controller_state_t state;
+    input_metrics_t metrics;
+    input_core_init();
+
+    make_payload(payload, PLAYGATE_BUTTON_A, 0, 0, 0, 0, 1);
+    TEST_ASSERT_EQUAL(INPUT_SUBMIT_ACCEPTED,
+                      input_core_submit(INPUT_SOURCE_SERIAL, payload, sizeof(payload), 1000));
+
+    input_core_snapshot(1400, &state, NULL);
+    input_core_mark_reported(state.generation, 1450);
+    input_core_snapshot(1450, NULL, &metrics);
+    TEST_ASSERT_EQUAL_UINT32(450, metrics.last_receive_to_submit_us);
+
+    static const int64_t ticks_us[] = {11400, 21400, 81400};
+    for (size_t i = 0; i < sizeof(ticks_us) / sizeof(ticks_us[0]); ++i) {
+        input_core_snapshot(ticks_us[i], &state, NULL);
+        input_core_mark_reported(state.generation, ticks_us[i] + 50);
+    }
+    input_core_snapshot(81450, NULL, &metrics);
+    TEST_ASSERT_EQUAL_UINT32(450, metrics.last_receive_to_submit_us);
+
+    make_payload(payload, 0, 0, 0, 0, 0, 2);
+    TEST_ASSERT_EQUAL(INPUT_SUBMIT_ACCEPTED,
+                      input_core_submit(INPUT_SOURCE_SERIAL, payload, sizeof(payload), 90000));
+    input_core_snapshot(90200, &state, NULL);
+    input_core_mark_reported(state.generation, 90300);
+    input_core_snapshot(90300, NULL, &metrics);
+    TEST_ASSERT_EQUAL_UINT32(300, metrics.last_receive_to_submit_us);
+}
+
+static void input_updated_probe(void *context)
+{
+    unsigned *calls = context;
+    ++(*calls);
+}
+
+TEST_CASE("updated callback fires on accepted input and owner release", "[controller_core]")
+{
+    uint8_t payload[PLAYGATE_INPUT_PAYLOAD_SIZE];
+    unsigned calls = 0;
+    input_core_init();
+    input_core_set_updated_callback(input_updated_probe, &calls);
+
+    make_payload(payload, PLAYGATE_BUTTON_A, 0, 0, 0, 0, 10);
+    TEST_ASSERT_EQUAL(INPUT_SUBMIT_ACCEPTED,
+                      input_core_submit(INPUT_SOURCE_SERIAL, payload, sizeof(payload), 1000));
+    TEST_ASSERT_EQUAL_UINT32(1, calls);
+
+    TEST_ASSERT_EQUAL(INPUT_SUBMIT_INVALID,
+                      input_core_submit(INPUT_SOURCE_SERIAL, payload, sizeof(payload) - 1, 2000));
+    TEST_ASSERT_EQUAL(INPUT_SUBMIT_STALE,
+                      input_core_submit(INPUT_SOURCE_SERIAL, payload, sizeof(payload), 3000));
+
+    make_payload(payload, PLAYGATE_BUTTON_B, 0, 0, 0, 0, 11);
+    TEST_ASSERT_EQUAL(INPUT_SUBMIT_CONFLICT,
+                      input_core_submit(INPUT_SOURCE_UDP, payload, sizeof(payload), 4000));
+    TEST_ASSERT_EQUAL_UINT32(1, calls);
+
+    input_core_release(INPUT_SOURCE_UDP);
+    TEST_ASSERT_EQUAL_UINT32(1, calls);
+
+    input_core_release(INPUT_SOURCE_SERIAL);
+    TEST_ASSERT_EQUAL_UINT32(2, calls);
+}

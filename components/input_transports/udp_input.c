@@ -1,5 +1,9 @@
 #include "input_transports.h"
 
+#include "sdkconfig.h"
+
+#if CONFIG_PLAYGATE_ENABLE_UDP
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -7,6 +11,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/select.h>
 #include <unistd.h>
 
 #include "controller_core.h"
@@ -20,7 +25,6 @@
 #include "gateway_status.h"
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
-#include "sdkconfig.h"
 
 #define UDP_TASK_STACK_DEPTH 4096
 #define UDP_TASK_PRIORITY 8
@@ -214,7 +218,18 @@ static void udp_input_task(void *context)
             sock = -1;
             continue;
         }
-        (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(UDP_IDLE_WAIT_MS));
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(sock, &readfds);
+        struct timeval tv = {
+            .tv_sec = 0,
+            .tv_usec = UDP_IDLE_WAIT_MS * 1000,
+        };
+        const int ready = select(sock + 1, &readfds, NULL, NULL, &tv);
+        if (ready < 0 && errno != EINTR) {
+            close(sock);
+            sock = -1;
+        }
     }
 }
 
@@ -256,9 +271,6 @@ static void wifi_cleanup(void)
 
 esp_err_t input_transports_start_wifi_udp(void)
 {
-#if !CONFIG_PLAYGATE_ENABLE_UDP
-    return ESP_ERR_NOT_SUPPORTED;
-#else
     if (s_udp_task != NULL || s_wifi_netif != NULL) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -367,5 +379,13 @@ esp_err_t input_transports_start_wifi_udp(void)
 
     udp_task_wake();
     return ESP_OK;
-#endif
 }
+
+#else /* !CONFIG_PLAYGATE_ENABLE_UDP */
+
+esp_err_t input_transports_start_wifi_udp(void)
+{
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+#endif

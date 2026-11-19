@@ -27,6 +27,7 @@
 
 #define SWITCH2_START_TIMEOUT_MS 5000u
 #define SWITCH2_REPORT_STACK_WORDS 2048u
+#define SWITCH2_MIN_REPORT_INTERVAL_US INT64_C(5000)
 #define SWITCH2_ADV_INTERVAL_30_MS 0x30u
 #define SWITCH2_ADV_ARG(instance) ((void *)(uintptr_t)((instance) + 1u))
 #define SWITCH2_CONN_ARG_TAG UINT32_C(0x80000000)
@@ -644,7 +645,7 @@ static void report_once(int64_t now)
     const int rc = ble_gatts_notify_custom(conn_handle,
                                             SWITCH2_INPUT_VALUE_HANDLE, om);
     if (rc == 0) {
-        input_core_mark_reported(state.generation, now);
+        input_core_mark_reported(state.generation, esp_timer_get_time());
         portENTER_CRITICAL(&g_switch2_lock);
         increment_saturating(&g_switch2_runtime.metrics.report_submits);
         portEXIT_CRITICAL(&g_switch2_lock);
@@ -653,30 +654,59 @@ static void report_once(int64_t now)
     }
 }
 
+static void report_task_wake(void *context)
+{
+    (void)context;
+    TaskHandle_t task = s_report_task;
+    if (task != NULL) {
+        xTaskNotifyGive(task);
+    }
+}
+
 static void report_task(void *arg)
 {
     (void)arg;
     const int64_t period_us = INT64_C(1000000) / CONFIG_PLAYGATE_REPORT_HZ;
-    int64_t deadline = esp_timer_get_time() + period_us;
+    const int64_t min_interval_us =
+        period_us < SWITCH2_MIN_REPORT_INTERVAL_US ? period_us
+                                                   : SWITCH2_MIN_REPORT_INTERVAL_US;
+    int64_t last_report_us = 0;
+    int64_t next_periodic_us = esp_timer_get_time() + period_us;
+    bool pending_urgent = false;
+
     for (;;) {
-        int64_t now = esp_timer_get_time();
-        if (now < deadline) {
-            const int64_t wait_us = deadline - now;
-            if (wait_us >= 1000) {
-                vTaskDelay(pdMS_TO_TICKS((wait_us + 999) / 1000));
-            } else {
-                taskYIELD();
+        const int64_t now = esp_timer_get_time();
+        int64_t target_us = next_periodic_us;
+        if (pending_urgent) {
+            const int64_t earliest_us =
+                last_report_us == 0 ? now : last_report_us + min_interval_us;
+            if (earliest_us < target_us) {
+                target_us = earliest_us;
+            }
+        }
+
+        if (now < target_us) {
+            const int64_t wait_us = target_us - now;
+            TickType_t wait_ticks = pdMS_TO_TICKS((wait_us + 999) / 1000);
+            if (wait_ticks == 0) {
+                wait_ticks = 1;
+            }
+            if (ulTaskNotifyTake(pdTRUE, wait_ticks) != 0u) {
+                pending_urgent = true;
             }
             continue;
         }
-        if (now - deadline >= period_us) {
+
+        if (!pending_urgent && now - next_periodic_us >= period_us) {
             portENTER_CRITICAL(&g_switch2_lock);
             increment_saturating(&g_switch2_runtime.metrics.missed_deadlines);
             portEXIT_CRITICAL(&g_switch2_lock);
-            deadline = now;
         }
+
+        pending_urgent = false;
         report_once(now);
-        deadline += period_us;
+        last_report_us = esp_timer_get_time();
+        next_periodic_us = last_report_us + period_us;
     }
 }
 
@@ -706,6 +736,21 @@ static void host_sync(void)
 static void host_reset(int reason)
 {
     (void)reason;
+    portENTER_CRITICAL(&g_switch2_lock);
+    g_switch2_runtime.console_conn_handle = SWITCH2_NO_CONN;
+    g_switch2_runtime.playgate_conn_handle = SWITCH2_NO_CONN;
+    g_switch2_runtime.console_encrypted = false;
+    g_switch2_runtime.console_input_subscribed = false;
+    g_switch2_runtime.console_feature_active = false;
+    g_switch2_runtime.console_ready = false;
+    g_switch2_runtime.playgate_status_subscribed = false;
+    g_switch2_runtime.waiting_for_playgate_disconnect = false;
+    g_switch2_runtime.feature_mask = 0;
+    portEXIT_CRITICAL(&g_switch2_lock);
+    s_console_adv_configured = false;
+    s_playgate_adv_configured = false;
+    input_core_release(INPUT_SOURCE_BLE);
+    gateway_status_set_ble_connected(false);
     gateway_status_set_hid_state(GATEWAY_HID_IDLE);
 }
 
@@ -788,6 +833,7 @@ esp_err_t switch2_controller_start(void)
         (void)nimble_port_stop();
         return ESP_ERR_NO_MEM;
     }
+    input_core_set_updated_callback(report_task_wake, NULL);
     s_started = true;
     return ESP_OK;
 }

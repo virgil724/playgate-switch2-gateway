@@ -74,7 +74,11 @@ typedef struct {
     bool timeout_neutral;
 } input_metrics_t;
 
+typedef void (*input_core_updated_cb_t)(void *context);
+
 void input_core_init(void);
+void input_core_set_updated_callback(input_core_updated_cb_t callback,
+                                     void *context);
 input_submit_result_t input_core_submit(input_source_t source,
                                         const uint8_t *bytes,
                                         size_t len,

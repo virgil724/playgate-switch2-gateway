@@ -35,8 +35,26 @@ static int64_t s_owner_lease_at_us;
 static uint64_t s_generation;
 static bool s_current_generation_reported;
 static uint64_t s_sampled_generation;
+static uint64_t s_last_measured_generation;
 static int64_t s_sampled_received_at_us;
 static bool s_sampled_has_receive_timestamp;
+static input_core_updated_cb_t s_updated_callback;
+static void *s_updated_callback_context;
+
+static void notify_input_updated(void)
+{
+    input_core_updated_cb_t callback;
+    void *context;
+
+    portENTER_CRITICAL(&s_core_lock);
+    callback = s_updated_callback;
+    context = s_updated_callback_context;
+    portEXIT_CRITICAL(&s_core_lock);
+
+    if (callback != NULL) {
+        callback(context);
+    }
+}
 
 static void increment_saturating(uint32_t *value)
 {
@@ -112,8 +130,20 @@ void input_core_init(void)
     s_generation = 0;
     s_current_generation_reported = true;
     s_sampled_generation = 0;
+    s_last_measured_generation = 0;
     s_sampled_received_at_us = 0;
     s_sampled_has_receive_timestamp = false;
+    s_updated_callback = NULL;
+    s_updated_callback_context = NULL;
+    portEXIT_CRITICAL(&s_core_lock);
+}
+
+void input_core_set_updated_callback(input_core_updated_cb_t callback,
+                                     void *context)
+{
+    portENTER_CRITICAL(&s_core_lock);
+    s_updated_callback = callback;
+    s_updated_callback_context = context;
     portEXIT_CRITICAL(&s_core_lock);
 }
 
@@ -141,7 +171,6 @@ input_submit_result_t input_core_submit(input_source_t source,
     }
 
     if (epoch->valid && !sequence_is_newer(decoded.sequence, epoch->sequence)) {
-        epoch->last_seen_at_us = now_us;
         increment_saturating(&s_metrics.stale);
         result = INPUT_SUBMIT_STALE;
     } else {
@@ -183,6 +212,9 @@ input_submit_result_t input_core_submit(input_source_t source,
     if (notify_status) {
         gateway_status_notify_core_changed();
     }
+    if (result == INPUT_SUBMIT_ACCEPTED) {
+        notify_input_updated();
+    }
     return result;
 }
 
@@ -210,6 +242,7 @@ void input_core_release(input_source_t source)
 
     if (notify_status) {
         gateway_status_notify_core_changed();
+        notify_input_updated();
     }
 }
 
@@ -262,6 +295,7 @@ void input_core_mark_reported(uint64_t generation, int64_t submitted_at_us)
     }
 
     if (generation != 0 && generation == s_sampled_generation &&
+        generation != s_last_measured_generation &&
         s_sampled_has_receive_timestamp) {
         uint64_t latency_us = 0;
         if (submitted_at_us >= s_sampled_received_at_us) {
@@ -269,6 +303,7 @@ void input_core_mark_reported(uint64_t generation, int64_t submitted_at_us)
         }
         s_metrics.last_receive_to_submit_us =
             latency_us > UINT32_MAX ? UINT32_MAX : (uint32_t)latency_us;
+        s_last_measured_generation = generation;
     }
 
     portEXIT_CRITICAL(&s_core_lock);

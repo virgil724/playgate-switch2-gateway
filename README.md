@@ -7,7 +7,7 @@ The point of the project is the *gateway* shape: one input core with a single ow
 ```
 USB serial ─┐
 UDP ────────┤
-WebSocket ──┼─► input_core ──► Switch 2 HID report (100 Hz)
+WebSocket ──┼─► input_core ──► Switch 2 HID report (event-driven, 5 ms min / 100 Hz heartbeat)
 BLE ────────┘   (lease/stale/   over Nintendo GATT
                  conflict)      │
                                 └─► 20-byte status (serial, BLE notify,
@@ -133,6 +133,14 @@ call C:\Users\virgil\.espressif\frameworks\esp-idf-v6.1\export.bat
 idf.py build
 idf.py -p COM5 flash
 ```
+
+For dedicated USB-tethered `playgate-host` deployments (disabling Wi-Fi SoftAP/UDP/Web to avoid 2.4 GHz radio coexistence jitter and unauthenticated network ingress), build with the `sdkconfig.usb_only` overlay:
+
+```bat
+idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.usb_only" build
+```
+
+Note that `report_task` wakes immediately on accepted input changes (subject to a 5 ms minimum interval aligned with the Switch 2 BLE connection interval) while keeping the periodic `CONFIG_PLAYGATE_REPORT_HZ` heartbeat.
 
 `idf.py monitor` is not useful on the gateway build: the UART console is disabled so the USB Serial/JTAG link stays free for framed data.
 
